@@ -1,0 +1,31 @@
+/* Hide by default on screen; show only when printing */
+.print-only {
+  display: none;
+}
+
+/* Hide only while printing */
+@media print {
+  /* Hide everything by default… */
+  body * {
+    visibility: hidden;
+  }
+  /* …except the print area */
+  #print-area, #print-area * {
+    visibility: visible;
+  }
+  /* Position the print area at the top-left and use full width */
+  #print-area {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+  }
+
+  /* Show print-only elements and hide screen-only elements */
+  .print-only {
+    display: block !important;
+  }
+  .screen-only {
+    display: none !important;
+  }
+}

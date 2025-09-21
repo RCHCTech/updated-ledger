@@ -1,0 +1,23 @@
+import Image from "next/image";
+
+export default function Header() {
+  return (
+    <header style={{
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      padding: "12px 24px",
+      borderBottom: "1px solid #eee",
+      marginBottom: "24px",
+      position: "sticky",
+      top: 0,
+      background: "white",
+      zIndex: 1000
+    }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+        <Image src="/logo.png" alt="RC Heating & Cooling Services Ltd" width={60} height={60} />
+        <h2 style={{ margin: 0 }}>RC Heating & Cooling Services Ltd</h2>
+      </div>
+    </header>
+  );
+}
