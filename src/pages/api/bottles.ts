@@ -1,15 +1,15 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { prisma } from "../../lib/prisma";
 
-// Types used locally to keep TS happy during mapping
-type TxRow = {
+// Explicit type for a transaction row
+interface TxRow {
   id: string;
   occurredAt: Date;
   transactionType: string;
   quantityKg: number | string | null;
   notes: string | null;
   gas?: { code?: string } | null;
-};
+}
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const { serial } = req.query;
@@ -22,10 +22,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const bottle = await prisma.bottle.findUnique({
       where: { serial },
       include: {
-        gas: true, // Gas relation on Bottle
+        gas: true,
         transactions: {
           orderBy: { occurredAt: "asc" },
-          include: { gas: true }, // Gas relation on each Transaction
+          include: { gas: true },
         },
       },
     });
@@ -34,16 +34,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(404).json({ error: "Bottle not found" });
     }
 
-    // Cast once so our map/filter/reduce callbacks are typed
-    const txs = bottle.transactions as unknown as TxRow[];
+    // Cast the transactions to TxRow[] so map has the right type
+    const txs: TxRow[] = bottle.transactions as unknown as TxRow[];
 
     const openingBalanceKg = Number((bottle as any).openingBalanceKg ?? 0);
 
-    // Compute current balance with a simple loop (avoids reduce typing issues)
     let currentQuantityKg = openingBalanceKg;
-    for (const t of txs) currentQuantityKg += Number(t.quantityKg ?? 0);
+    for (const t of txs) {
+      currentQuantityKg += Number(t.quantityKg ?? 0);
+    }
 
-    // Build the ledger rows (typed map callback)
+    // ✅ map callback now knows t is TxRow, so no implicit any
     const ledger = txs.map((t: TxRow) => ({
       id: t.id,
       occurredAt: t.occurredAt,
