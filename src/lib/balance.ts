@@ -9,8 +9,15 @@ type Tx = {
   gas?: { code?: string } | null;
 };
 
+type BottleWithTx = {
+  serial: string;
+  openingBalanceKg?: number | string | null;
+  gas?: { code?: string } | null;
+  transactions: Tx[];
+};
+
 export async function getBottleStateBySerial(serial: string) {
-  const bottle = await prisma.bottle.findUnique({
+  const bottleRaw = await prisma.bottle.findUnique({
     where: { serial },
     include: {
       transactions: {
@@ -21,38 +28,43 @@ export async function getBottleStateBySerial(serial: string) {
     },
   });
 
-  if (!bottle) return null;
+  if (!bottleRaw) return null;
 
-  const opening = Number((bottle as any).openingBalanceKg ?? 0);
+  const bottle = bottleRaw as unknown as BottleWithTx;
 
-  const txs = bottle.transactions as unknown as Tx[];
+  // Opening balance (safely coerced)
+  const opening = Number(bottle.openingBalanceKg ?? 0);
 
-  // ✅ Explicitly typed reducer (no implicit any)
-  const sum = txs.reduce<number>(
-    (acc: number, t: Tx) => acc + Number(t.quantityKg ?? 0),
-    opening
-  );
+  // ✅ No reduce -> no implicit any
+  let currentQuantityKg = opening;
+  for (const t of bottle.transactions) {
+    currentQuantityKg += Number(t.quantityKg ?? 0);
+  }
 
-  // Determine a gas code to display
+  // Decide which gas code to show
   let currentGasCode: string | null = bottle.gas?.code ?? null;
   if (!currentGasCode) {
-    const inflow = txs.find(
+    // First positive inflow gas
+    const inflow = bottle.transactions.find(
       (t) =>
         ["fill", "recover", "transfer_in"].includes(t.transactionType) &&
         Number(t.quantityKg ?? 0) > 0
     );
-    currentGasCode =
-      inflow?.gas?.code ??
-      (txs.length ? txs[txs.length - 1].gas?.code ?? null : null);
+    if (inflow?.gas?.code) currentGasCode = inflow.gas.code;
+    else if (bottle.transactions.length) {
+      const last = bottle.transactions[bottle.transactions.length - 1];
+      currentGasCode = last.gas?.code ?? null;
+    }
   }
 
+  // Shape the response the UI expects
   return {
     serial: bottle.serial,
     status: "active",
     gas: currentGasCode,
     openingBalanceKg: opening,
-    currentQuantityKg: sum,
-    ledger: txs.map((t) => ({
+    currentQuantityKg,
+    ledger: bottle.transactions.map((t) => ({
       id: t.id,
       occurredAt: t.occurredAt,
       type: t.transactionType,
