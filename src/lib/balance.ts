@@ -1,12 +1,12 @@
 import { prisma } from "./prisma";
 
-type TxForReduce = {
-  quantityKg: unknown;
+type Tx = {
+  id: string;
   transactionType: string;
-  gas?: { code?: string } | null;
+  quantityKg: number | string | null;
   occurredAt: Date;
-  id?: string;
-  notes?: string | null;
+  notes: string | null;
+  gas?: { code?: string } | null;
 };
 
 export async function getBottleStateBySerial(serial: string) {
@@ -23,30 +23,27 @@ export async function getBottleStateBySerial(serial: string) {
 
   if (!bottle) return null;
 
-  // Opening balance may be null/undefined in some schemas — coerce safely
   const opening = Number((bottle as any).openingBalanceKg ?? 0);
 
-  // ✅ Explicitly type the reducer to avoid implicit any
-  const sum = (bottle.transactions as TxForReduce[]).reduce<number>(
-    (acc: number, t: TxForReduce) => acc + Number(t.quantityKg),
+  const txs = bottle.transactions as unknown as Tx[];
+
+  // ✅ Explicitly typed reducer (no implicit any)
+  const sum = txs.reduce<number>(
+    (acc: number, t: Tx) => acc + Number(t.quantityKg ?? 0),
     opening
   );
 
-  // Work with gas code as a simple string for display
+  // Determine a gas code to display
   let currentGasCode: string | null = bottle.gas?.code ?? null;
-
   if (!currentGasCode) {
-    // First positive inflow gas if available
-    const inflow = (bottle.transactions as TxForReduce[]).find(
+    const inflow = txs.find(
       (t) =>
         ["fill", "recover", "transfer_in"].includes(t.transactionType) &&
-        Number(t.quantityKg) > 0
+        Number(t.quantityKg ?? 0) > 0
     );
     currentGasCode =
       inflow?.gas?.code ??
-      // Fallback: last transaction’s gas (if any)
-      ((bottle.transactions[bottle.transactions.length - 1] as TxForReduce | undefined)?.gas?.code ??
-        null);
+      (txs.length ? txs[txs.length - 1].gas?.code ?? null : null);
   }
 
   return {
@@ -55,12 +52,12 @@ export async function getBottleStateBySerial(serial: string) {
     gas: currentGasCode,
     openingBalanceKg: opening,
     currentQuantityKg: sum,
-    ledger: (bottle.transactions as TxForReduce[]).map((t) => ({
-      id: (t as any).id,
+    ledger: txs.map((t) => ({
+      id: t.id,
       occurredAt: t.occurredAt,
       type: t.transactionType,
       gas: t.gas?.code ?? currentGasCode,
-      quantityKg: Number(t.quantityKg),
+      quantityKg: Number(t.quantityKg ?? 0),
       notes: t.notes ?? null,
     })),
   };
